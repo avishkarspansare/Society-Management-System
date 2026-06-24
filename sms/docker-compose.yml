@@ -1,0 +1,50 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: sms-postgres
+    environment:
+      POSTGRES_DB: society_management
+      POSTGRES_USER: neondb_owner
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-npg_pU1MhFuVe4rQ}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # FIX: Changed "-U society_user" to "-U neondb_owner" to match the actual user
+      test: ["CMD-SHELL", "pg_isready -U neondb_owner -d society_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sms-network
+
+  # Spring Boot Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sms-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      # FIX: Pointing to the local 'postgres' container instead of the remote AWS Neon server
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/society_management
+      SPRING_DATASOURCE_USERNAME: neondb_owner
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD:-npg_pU1MhFuVe4rQ}
+      JWT_SECRET: ${JWT_SECRET:-myVerySecureSecretKeyForJWTTokenGenerationThatIsAtLeast256BitsLong2026}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sms-network
+    restart: on-failure
+
+volumes:
+  postgres_data:
+
+networks:
+  sms-network:
+    driver: bridge
