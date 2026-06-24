@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  # ─── PostgreSQL Database ──────────────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: sms_postgres
+    environment:
+      POSTGRES_DB: society_management
+      POSTGRES_USER: society_user
+      POSTGRES_PASSWORD: society_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U society_user -d society_management"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Spring Boot Backend ─────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sms_backend
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      DB_URL: jdbc:postgresql://postgres:5432/society_management
+      DB_USERNAME: society_user
+      DB_PASSWORD: society_pass
+      JWT_SECRET: myVerySecureSecretKeyForJWTTokenGenerationThatIsAtLeast256BitsLong2026
+      MAIL_HOST: smtp.gmail.com
+      MAIL_PORT: 587
+      MAIL_USERNAME: ${MAIL_USERNAME:-noreply@society.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-changeme}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ─── React Frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sms_frontend
+    ports:
+      - "3000:80"
+    environment:
+      VITE_API_URL: http://localhost:8080
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
